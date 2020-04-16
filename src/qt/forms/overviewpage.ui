@@ -115,7 +115,7 @@
              <number>12</number>
             </property>
             <item row="2" column="2">
-             <widget class="QLabel" name="labelWatchPending">
+             <widget class="QLabel" name="labelFiatPending">
               <property name="font">
                <font>
                 <weight>75</weight>
@@ -126,10 +126,10 @@
                <cursorShape>IBeamCursor</cursorShape>
               </property>
               <property name="toolTip">
-               <string>Unconfirmed transactions to watch-only addresses</string>
+               <string>Unconfirmed transactions in fiat currency</string>
               </property>
               <property name="text">
-               <string notr="true">0.000 000 00 BTC</string>
+               <string notr="true">$0.00 USD</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -165,7 +165,7 @@
              </widget>
             </item>
             <item row="3" column="2">
-             <widget class="QLabel" name="labelWatchImmature">
+             <widget class="QLabel" name="labelFiatImmature">
               <property name="font">
                <font>
                 <weight>75</weight>
@@ -179,7 +179,7 @@
                <string>Mined balance in watch-only addresses that has not yet matured</string>
               </property>
               <property name="text">
-               <string notr="true">0.000 000 00 BTC</string>
+               <string notr="true">$0.00 USD</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -197,7 +197,7 @@
              </widget>
             </item>
             <item row="4" column="2">
-             <widget class="Line" name="lineWatchBalance">
+             <widget class="Line" name="lineFiatBalance">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                 <horstretch>0</horstretch>
@@ -293,7 +293,7 @@
              </widget>
             </item>
             <item row="5" column="2">
-             <widget class="QLabel" name="labelWatchTotal">
+             <widget class="QLabel" name="labelFiatTotal">
               <property name="font">
                <font>
                 <weight>75</weight>
@@ -304,10 +304,10 @@
                <cursorShape>IBeamCursor</cursorShape>
               </property>
               <property name="toolTip">
-               <string>Current total balance in watch-only addresses</string>
+               <string>Current total balance in fiat currency</string>
               </property>
               <property name="text">
-               <string notr="true">0.000 000 00 BTC</string>
+               <string notr="true">$0.00 USD</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -318,9 +318,9 @@
              </widget>
             </item>
             <item row="0" column="2">
-             <widget class="QLabel" name="labelWatchonly">
+             <widget class="QLabel" name="labelFiat">
               <property name="text">
-               <string>Watch-only:</string>
+               <string>USD:</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -360,7 +360,7 @@
              </widget>
             </item>
             <item row="1" column="2">
-             <widget class="QLabel" name="labelWatchAvailable">
+             <widget class="QLabel" name="labelFiatAvailable">
               <property name="font">
                <font>
                 <weight>75</weight>
@@ -371,10 +371,10 @@
                <cursorShape>IBeamCursor</cursorShape>
               </property>
               <property name="toolTip">
-               <string>Your current balance in watch-only addresses</string>
+               <string>Your current balance in fiat currency</string>
               </property>
               <property name="text">
-               <string notr="true">0.000 000 00 BTC</string>
+               <string notr="true">$0.00 USD</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -392,9 +392,9 @@
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QLabel" name="labelSpendable">
+             <widget class="QLabel" name="labelBtc">
               <property name="text">
-               <string>Spendable:</string>
+               <string>BTC:</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

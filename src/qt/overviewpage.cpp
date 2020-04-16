@@ -6,6 +6,7 @@
 #include <qt/forms/ui_overviewpage.h>
 
 #include <qt/bitcoinunits.h>
+#include <qt/fiatunits.h>
 #include <qt/clientmodel.h>
 #include <qt/guiconstants.h>
 #include <qt/guiutil.h>
@@ -160,6 +161,7 @@ OverviewPage::~OverviewPage()
 void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
 {
     int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    int unitFiat = walletModel->getOptionsModel()->getFiatDisplayUnit(); // USD
     m_balances = balances;
     if (walletModel->wallet().privateKeysDisabled()) {
         ui->labelBalance->setText(BitcoinUnits::formatWithUnit(unit, balances.watch_only_balance, false, BitcoinUnits::separatorAlways));
@@ -171,10 +173,10 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
         ui->labelUnconfirmed->setText(BitcoinUnits::formatWithUnit(unit, balances.unconfirmed_balance, false, BitcoinUnits::separatorAlways));
         ui->labelImmature->setText(BitcoinUnits::formatWithUnit(unit, balances.immature_balance, false, BitcoinUnits::separatorAlways));
         ui->labelTotal->setText(BitcoinUnits::formatWithUnit(unit, balances.balance + balances.unconfirmed_balance + balances.immature_balance, false, BitcoinUnits::separatorAlways));
-        ui->labelWatchAvailable->setText(BitcoinUnits::formatWithUnit(unit, balances.watch_only_balance, false, BitcoinUnits::separatorAlways));
-        ui->labelWatchPending->setText(BitcoinUnits::formatWithUnit(unit, balances.unconfirmed_watch_only_balance, false, BitcoinUnits::separatorAlways));
-        ui->labelWatchImmature->setText(BitcoinUnits::formatWithUnit(unit, balances.immature_watch_only_balance, false, BitcoinUnits::separatorAlways));
-        ui->labelWatchTotal->setText(BitcoinUnits::formatWithUnit(unit, balances.watch_only_balance + balances.unconfirmed_watch_only_balance + balances.immature_watch_only_balance, false, BitcoinUnits::separatorAlways));
+        ui->labelFiatAvailable->setText(FiatUnits::formatWithUnit(unitFiat, balances.watch_only_balance, false, FiatUnits::separatorAlways));
+        ui->labelFiatPending->setText(FiatUnits::formatWithUnit(unitFiat, balances.unconfirmed_watch_only_balance, false, FiatUnits::separatorAlways));
+        ui->labelFiatImmature->setText(FiatUnits::formatWithUnit(unitFiat, balances.immature_watch_only_balance, false, FiatUnits::separatorAlways));
+        ui->labelFiatTotal->setText(FiatUnits::formatWithUnit(unitFiat, balances.watch_only_balance + balances.unconfirmed_watch_only_balance + balances.immature_watch_only_balance, false, FiatUnits::separatorAlways));
     }
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
@@ -184,21 +186,18 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
     // for symmetry reasons also show immature label when the watch-only one is shown
     ui->labelImmature->setVisible(showImmature || showWatchOnlyImmature);
     ui->labelImmatureText->setVisible(showImmature || showWatchOnlyImmature);
-    ui->labelWatchImmature->setVisible(!walletModel->wallet().privateKeysDisabled() && showWatchOnlyImmature); // show watch-only immature balance
+    ui->labelFiatImmature->setVisible(!walletModel->wallet().privateKeysDisabled() && showWatchOnlyImmature); // show watch-only immature balance
 }
 
-// show/hide watch-only labels
-void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
+// show/hide fiat labels
+void OverviewPage::showFiatLabels()
 {
-    ui->labelSpendable->setVisible(showWatchOnly);      // show spendable label (only when watch-only is active)
-    ui->labelWatchonly->setVisible(showWatchOnly);      // show watch-only label
-    ui->lineWatchBalance->setVisible(showWatchOnly);    // show watch-only balance separator line
-    ui->labelWatchAvailable->setVisible(showWatchOnly); // show watch-only available balance
-    ui->labelWatchPending->setVisible(showWatchOnly);   // show watch-only pending balance
-    ui->labelWatchTotal->setVisible(showWatchOnly);     // show watch-only total balance
-
-    if (!showWatchOnly)
-        ui->labelWatchImmature->hide();
+    ui->labelBtc->setVisible(true);      
+    ui->labelFiat->setVisible(true);
+    ui->lineFiatBalance->setVisible(true);
+    ui->labelFiatAvailable->setVisible(true);
+    ui->labelFiatPending->setVisible(true);
+    ui->labelFiatTotal->setVisible(true);
 }
 
 void OverviewPage::setClientModel(ClientModel *model)
@@ -236,10 +235,7 @@ void OverviewPage::setWalletModel(WalletModel *model)
 
         connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &OverviewPage::updateDisplayUnit);
 
-        updateWatchOnlyLabels(wallet.haveWatchOnly() && !model->wallet().privateKeysDisabled());
-        connect(model, &WalletModel::notifyWatchonlyChanged, [this](bool showWatchOnly) {
-            updateWatchOnlyLabels(showWatchOnly && !walletModel->wallet().privateKeysDisabled());
-        });
+        showFiatLabels();
     }
 
     // update the display unit, to not use the default ("BTC")

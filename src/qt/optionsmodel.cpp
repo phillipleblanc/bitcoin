@@ -9,6 +9,7 @@
 #include <qt/optionsmodel.h>
 
 #include <qt/bitcoinunits.h>
+#include <qt/fiatunits.h>
 #include <qt/guiconstants.h>
 #include <qt/guiutil.h>
 
@@ -71,6 +72,11 @@ void OptionsModel::Init(bool resetSettings)
     if (!settings.contains("nDisplayUnit"))
         settings.setValue("nDisplayUnit", BitcoinUnits::BTC);
     nDisplayUnit = settings.value("nDisplayUnit").toInt();
+
+    // Display Fiat
+    if (!settings.contains("nFiatDisplayUnit"))
+        settings.setValue("nFiatDisplayUnit", FiatUnits::USD);
+    nFiatDisplayUnit = settings.value("nFiatDisplayUnit").toInt();
 
     if (!settings.contains("strThirdPartyTxUrls"))
         settings.setValue("strThirdPartyTxUrls", "");

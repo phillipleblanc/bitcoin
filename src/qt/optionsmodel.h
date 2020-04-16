@@ -79,6 +79,7 @@ public:
     bool getMinimizeToTray() const { return fMinimizeToTray; }
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
+    int getFiatDisplayUnit() const { return nFiatDisplayUnit; }
     QString getThirdPartyTxUrls() const { return strThirdPartyTxUrls; }
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
@@ -101,6 +102,7 @@ private:
     bool fMinimizeOnClose;
     QString language;
     int nDisplayUnit;
+    int nFiatDisplayUnit;
     QString strThirdPartyTxUrls;
     bool fCoinControlFeatures;
     /* settings that were overridden by command-line */
@@ -113,6 +115,7 @@ private:
     void checkAndMigrate();
 Q_SIGNALS:
     void displayUnitChanged(int unit);
+    void fiatDisplayUnitChanged(int unit);
     void coinControlFeaturesChanged(bool);
     void hideTrayIconChanged(bool);
 };

@@ -57,7 +57,7 @@ private Q_SLOTS:
     void updateDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
     void updateAlerts(const QString &warnings);
-    void updateWatchOnlyLabels(bool showWatchOnly);
+    void showFiatLabels();
     void handleOutOfSyncWarningClicks();
 };
 
