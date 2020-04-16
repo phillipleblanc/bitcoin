@@ -60,6 +60,7 @@ private Q_SLOTS:
     void updateAlerts(const QString &warnings);
     void showFiatLabels();
     void handleOutOfSyncWarningClicks();
+    void setFiatBalance(int unitFiat, const CAmount& walletBalance);
 };
 
 #endif // BITCOIN_QT_OVERVIEWPAGE_H

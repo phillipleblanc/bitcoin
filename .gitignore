@@ -1,5 +1,7 @@
 *.tar.gz
 
+apiproxy
+
 *.exe
 *.pdb
 src/bitcoin

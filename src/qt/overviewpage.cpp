@@ -19,10 +19,24 @@
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
+#include <iostream>
+#include <event2/buffer.h>
+#include <support/events.h>
+
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
 
 Q_DECLARE_METATYPE(interfaces::WalletBalances)
+
+/** Reply structure for request_done to fill in */
+struct HTTPReply
+{
+    HTTPReply(): status(0), error(-1) {}
+
+    int status;
+    int error;
+    std::string body;
+};
 
 class TxViewDelegate : public QAbstractItemDelegate
 {
@@ -174,10 +188,7 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
         ui->labelImmature->setText(BitcoinUnits::formatWithUnit(unit, balances.immature_balance, false, BitcoinUnits::separatorAlways));
         ui->labelTotal->setText(BitcoinUnits::formatWithUnit(unit, balances.balance + balances.unconfirmed_balance + balances.immature_balance, false, BitcoinUnits::separatorAlways));
         ui->labelFiat->setText(FiatUnits::shortName(unitFiat) + QString(":"));
-        ui->labelFiatAvailable->setText(FiatUnits::formatWithUnit(unitFiat, balances.watch_only_balance, false, FiatUnits::separatorAlways));
-        ui->labelFiatPending->setText(FiatUnits::formatWithUnit(unitFiat, balances.unconfirmed_watch_only_balance, false, FiatUnits::separatorAlways));
-        ui->labelFiatImmature->setText(FiatUnits::formatWithUnit(unitFiat, balances.immature_watch_only_balance, false, FiatUnits::separatorAlways));
-        ui->labelFiatTotal->setText(FiatUnits::formatWithUnit(unitFiat, balances.watch_only_balance + balances.unconfirmed_watch_only_balance + balances.immature_watch_only_balance, false, FiatUnits::separatorAlways));
+        setFiatBalance(unitFiat, balances.balance);
     }
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
@@ -188,6 +199,85 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
     ui->labelImmature->setVisible(showImmature || showWatchOnlyImmature);
     ui->labelImmatureText->setVisible(showImmature || showWatchOnlyImmature);
     ui->labelFiatImmature->setVisible(!walletModel->wallet().privateKeysDisabled() && showWatchOnlyImmature); // show watch-only immature balance
+}
+
+static void http_request_done(struct evhttp_request *req, void *ctx)
+{
+    HTTPReply *reply = static_cast<HTTPReply*>(ctx);
+
+    if (req == nullptr) {
+        /* If req is nullptr, it means an error occurred while connecting: the
+         * error code will have been passed to http_error_cb.
+         */
+        reply->status = 0;
+        return;
+    }
+
+    reply->status = evhttp_request_get_response_code(req);
+
+    struct evbuffer *buf = evhttp_request_get_input_buffer(req);
+    if (buf)
+    {
+        size_t size = evbuffer_get_length(buf);
+        const char *data = (const char*)evbuffer_pullup(buf, size);
+        if (data)
+            reply->body = std::string(data, size);
+        evbuffer_drain(buf, size);
+    }
+}
+
+#if LIBEVENT_VERSION_NUMBER >= 0x02010300
+static void http_error_cb(enum evhttp_request_error err, void *ctx)
+{
+    HTTPReply *reply = static_cast<HTTPReply*>(ctx);
+    reply->error = err;
+}
+#endif
+
+void OverviewPage::setFiatBalance(int unitFiat, const CAmount& walletBallance)
+{
+    // Obtain event base
+    raii_event_base base = obtain_event_base();
+
+    // Synchronously look up hostname
+    raii_evhttp_connection evcon = obtain_evhttp_connection_base(base.get(), "localhost", 8080);
+
+    evhttp_connection_set_timeout(evcon.get(), 10);
+
+    HTTPReply response;
+    raii_evhttp_request req = obtain_evhttp_request(http_request_done, (void*)&response);
+
+    if (req == nullptr)
+    {
+        return;
+    }
+    
+    #if LIBEVENT_VERSION_NUMBER >= 0x02010300
+        evhttp_request_set_error_cb(req.get(), http_error_cb);
+    #endif
+
+    struct evkeyvalq* output_headers = evhttp_request_get_output_headers(req.get());
+    evhttp_add_header(output_headers, "Host", "localhost");
+
+    std::string endpoint = "/v2/prices/spot?currency=" + FiatUnits::shortName(unitFiat).toStdString();
+    int r = evhttp_make_request(evcon.get(), req.get(), EVHTTP_REQ_GET, endpoint.c_str());
+    req.release(); // ownership moved to evcon in above call
+    if (r != 0) {
+        return;
+    }
+
+    event_base_dispatch(base.get());
+
+    int endIndex = response.body.find(".", 49);
+
+    int price = std::stoi(response.body.substr(49, endIndex - 49)) * FiatUnits::factor(unitFiat);
+
+    int fiatBalance = price * (walletBallance / 100000000.0);
+
+    ui->labelFiatAvailable->setText(FiatUnits::formatWithUnit(unitFiat, fiatBalance, false, FiatUnits::separatorAlways));
+    ui->labelFiatPending->setText(FiatUnits::formatWithUnit(unitFiat, 0, false, FiatUnits::separatorAlways));
+    ui->labelFiatImmature->setText(FiatUnits::formatWithUnit(unitFiat, 0, false, FiatUnits::separatorAlways));
+    ui->labelFiatTotal->setText(FiatUnits::formatWithUnit(unitFiat, 0, false, FiatUnits::separatorAlways));
 }
 
 // show/hide fiat labels
