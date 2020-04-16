@@ -313,6 +313,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
 #endif
         case DisplayUnit:
             return nDisplayUnit;
+        case FiatDisplayUnit:
+            return nFiatDisplayUnit;
         case ThirdPartyTxUrls:
             return strThirdPartyTxUrls;
         case Language:
@@ -429,6 +431,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case DisplayUnit:
             setDisplayUnit(value);
             break;
+        case FiatDisplayUnit:
+            setFiatDisplayUnit(value);
+            break;
         case ThirdPartyTxUrls:
             if (strThirdPartyTxUrls != value.toString()) {
                 strThirdPartyTxUrls = value.toString();
@@ -496,6 +501,18 @@ void OptionsModel::setDisplayUnit(const QVariant &value)
         nDisplayUnit = value.toInt();
         settings.setValue("nDisplayUnit", nDisplayUnit);
         Q_EMIT displayUnitChanged(nDisplayUnit);
+    }
+}
+
+/** Updates current fiat unit in memory, settings and emits fiatDisplayUnitChanged(newUnit) signal */
+void OptionsModel::setFiatDisplayUnit(const QVariant &value)
+{
+    if (!value.isNull())
+    {
+        QSettings settings;
+        nFiatDisplayUnit = value.toInt();
+        settings.setValue("nFiatDisplayUnit", nFiatDisplayUnit);
+        Q_EMIT fiatDisplayUnitChanged(nFiatDisplayUnit);
     }
 }
 

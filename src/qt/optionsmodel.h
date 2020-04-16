@@ -63,6 +63,7 @@ public:
         SpendZeroConfChange,    // bool
         Listen,                 // bool
         OptionIDRowCount,
+        FiatDisplayUnit,               // FiatUnits::Unit
     };
 
     void Init(bool resetSettings = false);
@@ -73,6 +74,8 @@ public:
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
     /** Updates current unit in memory, settings and emits displayUnitChanged(newUnit) signal */
     void setDisplayUnit(const QVariant &value);
+    /** Updates current fiat unit in memory, settings and emits fiatDisplayUnitChanged(newUnit) signal */
+    void setFiatDisplayUnit(const QVariant &value);
 
     /* Explicit getters */
     bool getHideTrayIcon() const { return fHideTrayIcon; }
