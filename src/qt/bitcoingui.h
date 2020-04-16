@@ -33,6 +33,7 @@ class PlatformStyle;
 class RPCConsole;
 class SendCoinsRecipient;
 class UnitDisplayStatusBarControl;
+class FiatUnitDisplayStatusBarControl;
 class WalletController;
 class WalletFrame;
 class WalletModel;
@@ -115,6 +116,7 @@ private:
     WalletFrame* walletFrame = nullptr;
 
     UnitDisplayStatusBarControl* unitDisplayControl = nullptr;
+    FiatUnitDisplayStatusBarControl* fiatUnitDisplayControl = nullptr;
     QLabel* labelWalletEncryptionIcon = nullptr;
     QLabel* labelWalletHDStatusIcon = nullptr;
     GUIUtil::ClickableLabel* labelProxyIcon = nullptr;
@@ -335,6 +337,35 @@ private:
 private Q_SLOTS:
     /** When Display Units are changed on OptionsModel it will refresh the display text of the control on the status bar */
     void updateDisplayUnit(int newUnits);
+    /** Tells underlying optionsModel to update its current display unit. */
+    void onMenuSelection(QAction* action);
+};
+
+class FiatUnitDisplayStatusBarControl : public QLabel
+{
+    Q_OBJECT
+
+public:
+    explicit FiatUnitDisplayStatusBarControl(const PlatformStyle *platformStyle);
+    /** Lets the control know about the Options Model (and its signals) */
+    void setOptionsModel(OptionsModel *optionsModel);
+
+protected:
+    /** So that it responds to left-button clicks */
+    void mousePressEvent(QMouseEvent *event);
+
+private:
+    OptionsModel *optionsModel;
+    QMenu* menu;
+
+    /** Shows context menu with Display Unit options by the mouse coordinates */
+    void onFiatDisplayUnitsClicked(const QPoint& point);
+    /** Creates context menu, its actions, and wires up all the relevant signals for mouse events. */
+    void createContextMenu();
+
+private Q_SLOTS:
+    /** When Display Units are changed on OptionsModel it will refresh the display text of the control on the status bar */
+    void updateFiatDisplayUnit(int newUnits);
     /** Tells underlying optionsModel to update its current display unit. */
     void onMenuSelection(QAction* action);
 };

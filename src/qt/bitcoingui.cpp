@@ -5,6 +5,7 @@
 #include <qt/bitcoingui.h>
 
 #include <qt/bitcoinunits.h>
+#include <qt/fiatunits.h>
 #include <qt/clientmodel.h>
 #include <qt/createwalletdialog.h>
 #include <qt/guiconstants.h>
@@ -143,6 +144,7 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
     frameBlocksLayout->setContentsMargins(3,0,3,0);
     frameBlocksLayout->setSpacing(3);
     unitDisplayControl = new UnitDisplayStatusBarControl(platformStyle);
+    fiatUnitDisplayControl = new FiatUnitDisplayStatusBarControl(platformStyle);
     labelWalletEncryptionIcon = new QLabel();
     labelWalletHDStatusIcon = new QLabel();
     labelProxyIcon = new GUIUtil::ClickableLabel();
@@ -151,6 +153,7 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
     if(enableWallet)
     {
         frameBlocksLayout->addStretch();
+        frameBlocksLayout->addWidget(fiatUnitDisplayControl);
         frameBlocksLayout->addWidget(unitDisplayControl);
         frameBlocksLayout->addStretch();
         frameBlocksLayout->addWidget(labelWalletEncryptionIcon);
@@ -582,6 +585,7 @@ void BitcoinGUI::setClientModel(ClientModel *_clientModel)
         }
 #endif // ENABLE_WALLET
         unitDisplayControl->setOptionsModel(_clientModel->getOptionsModel());
+        fiatUnitDisplayControl->setOptionsModel(_clientModel->getOptionsModel());
 
         OptionsModel* optionsModel = _clientModel->getOptionsModel();
         if (optionsModel && trayIcon) {
@@ -608,6 +612,7 @@ void BitcoinGUI::setClientModel(ClientModel *_clientModel)
         }
 #endif // ENABLE_WALLET
         unitDisplayControl->setOptionsModel(nullptr);
+        fiatUnitDisplayControl->setOptionsModel(nullptr);
     }
 }
 
@@ -1461,5 +1466,79 @@ void UnitDisplayStatusBarControl::onMenuSelection(QAction* action)
     if (action)
     {
         optionsModel->setDisplayUnit(action->data());
+    }
+}
+
+FiatUnitDisplayStatusBarControl::FiatUnitDisplayStatusBarControl(const PlatformStyle *platformStyle) :
+    optionsModel(nullptr),
+    menu(nullptr)
+{
+    createContextMenu();
+    setToolTip(tr("Currencies to show. Click to select another currency."));
+    QList<FiatUnits::Unit> units = FiatUnits::availableUnits();
+    int max_width = 0;
+    const QFontMetrics fm(font());
+    for (const FiatUnits::Unit unit : units)
+    {
+        max_width = qMax(max_width, GUIUtil::TextWidth(fm, FiatUnits::longName(unit)));
+    }
+    setMinimumSize(max_width, 0);
+    setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    setStyleSheet(QString("QLabel { color : %1 }").arg(platformStyle->SingleColor().name()));
+}
+
+/** So that it responds to button clicks */
+void FiatUnitDisplayStatusBarControl::mousePressEvent(QMouseEvent *event)
+{
+    onFiatDisplayUnitsClicked(event->pos());
+}
+
+/** Creates context menu, its actions, and wires up all the relevant signals for mouse events. */
+void FiatUnitDisplayStatusBarControl::createContextMenu()
+{
+    menu = new QMenu(this);
+    for (const FiatUnits::Unit u : FiatUnits::availableUnits())
+    {
+        QAction *menuAction = new QAction(QString(FiatUnits::longName(u)), this);
+        menuAction->setData(QVariant(u));
+        menu->addAction(menuAction);
+    }
+    connect(menu, &QMenu::triggered, this, &FiatUnitDisplayStatusBarControl::onMenuSelection);
+}
+
+/** Lets the control know about the Options Model (and its signals) */
+void FiatUnitDisplayStatusBarControl::setOptionsModel(OptionsModel *_optionsModel)
+{
+    if (_optionsModel)
+    {
+        this->optionsModel = _optionsModel;
+
+        // be aware of a display unit change reported by the OptionsModel object.
+        connect(_optionsModel, &OptionsModel::fiatDisplayUnitChanged, this, &FiatUnitDisplayStatusBarControl::updateFiatDisplayUnit);
+
+        // initialize the display units label with the current value in the model.
+        updateFiatDisplayUnit(_optionsModel->getFiatDisplayUnit());
+    }
+}
+
+/** When Display Units are changed on OptionsModel it will refresh the display text of the control on the status bar */
+void FiatUnitDisplayStatusBarControl::updateFiatDisplayUnit(int newUnits)
+{
+    setText(FiatUnits::longName(newUnits));
+}
+
+/** Shows context menu with Display Unit options by the mouse coordinates */
+void FiatUnitDisplayStatusBarControl::onFiatDisplayUnitsClicked(const QPoint& point)
+{
+    QPoint globalPos = mapToGlobal(point);
+    menu->exec(globalPos);
+}
+
+/** Tells underlying optionsModel to update its current display unit. */
+void FiatUnitDisplayStatusBarControl::onMenuSelection(QAction* action)
+{
+    if (action)
+    {
+        optionsModel->setFiatDisplayUnit(action->data());
     }
 }
