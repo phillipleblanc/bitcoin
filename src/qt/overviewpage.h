@@ -55,6 +55,7 @@ private:
 
 private Q_SLOTS:
     void updateDisplayUnit();
+    void updateFiatDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
     void updateAlerts(const QString &warnings);
     void showFiatLabels();

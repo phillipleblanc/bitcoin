@@ -173,6 +173,7 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
         ui->labelUnconfirmed->setText(BitcoinUnits::formatWithUnit(unit, balances.unconfirmed_balance, false, BitcoinUnits::separatorAlways));
         ui->labelImmature->setText(BitcoinUnits::formatWithUnit(unit, balances.immature_balance, false, BitcoinUnits::separatorAlways));
         ui->labelTotal->setText(BitcoinUnits::formatWithUnit(unit, balances.balance + balances.unconfirmed_balance + balances.immature_balance, false, BitcoinUnits::separatorAlways));
+        ui->labelFiat->setText(FiatUnits::shortName(unitFiat) + QString(":"));
         ui->labelFiatAvailable->setText(FiatUnits::formatWithUnit(unitFiat, balances.watch_only_balance, false, FiatUnits::separatorAlways));
         ui->labelFiatPending->setText(FiatUnits::formatWithUnit(unitFiat, balances.unconfirmed_watch_only_balance, false, FiatUnits::separatorAlways));
         ui->labelFiatImmature->setText(FiatUnits::formatWithUnit(unitFiat, balances.immature_watch_only_balance, false, FiatUnits::separatorAlways));
@@ -234,12 +235,14 @@ void OverviewPage::setWalletModel(WalletModel *model)
         connect(model, &WalletModel::balanceChanged, this, &OverviewPage::setBalance);
 
         connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &OverviewPage::updateDisplayUnit);
+        connect(model->getOptionsModel(), &OptionsModel::fiatDisplayUnitChanged, this, &OverviewPage::updateFiatDisplayUnit);
 
         showFiatLabels();
     }
 
     // update the display unit, to not use the default ("BTC")
     updateDisplayUnit();
+    updateFiatDisplayUnit();
 }
 
 void OverviewPage::updateDisplayUnit()
@@ -254,6 +257,16 @@ void OverviewPage::updateDisplayUnit()
         txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
 
         ui->listTransactions->update();
+    }
+}
+
+void OverviewPage::updateFiatDisplayUnit()
+{
+    if(walletModel && walletModel->getOptionsModel())
+    {
+        if (m_balances.balance != -1) {
+            setBalance(m_balances);
+        }
     }
 }
 
