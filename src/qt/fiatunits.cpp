@@ -36,8 +36,8 @@ QString FiatUnits::longName(int unit)
 {
     switch(unit)
     {
-    case USD: return QString("US Dollars");
-    case KRW: return QString("Korean Won");
+    case USD: return QString("US Dollars (USD)");
+    case KRW: return QString("Korean Won (KRW)");
     default: return QString("???");
     }
 }
