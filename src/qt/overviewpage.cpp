@@ -277,7 +277,7 @@ void OverviewPage::setFiatBalance(int unitFiat, const CAmount& walletBallance)
     ui->labelFiatAvailable->setText(FiatUnits::formatWithUnit(unitFiat, fiatBalance, false, FiatUnits::separatorAlways));
     ui->labelFiatPending->setText(FiatUnits::formatWithUnit(unitFiat, 0, false, FiatUnits::separatorAlways));
     ui->labelFiatImmature->setText(FiatUnits::formatWithUnit(unitFiat, 0, false, FiatUnits::separatorAlways));
-    ui->labelFiatTotal->setText(FiatUnits::formatWithUnit(unitFiat, 0, false, FiatUnits::separatorAlways));
+    ui->labelFiatTotal->setText(FiatUnits::formatWithUnit(unitFiat, fiatBalance, false, FiatUnits::separatorAlways));
 }
 
 // show/hide fiat labels
