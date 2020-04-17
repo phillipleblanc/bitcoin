@@ -268,6 +268,10 @@ void OverviewPage::setFiatBalance(int unitFiat, const CAmount& walletBallance)
 
     event_base_dispatch(base.get());
 
+    if (response.status != 200) {
+        return;
+    }
+
     int endIndex = response.body.find(".", 49);
 
     int price = std::stoi(response.body.substr(49, endIndex - 49)) * FiatUnits::factor(unitFiat);
