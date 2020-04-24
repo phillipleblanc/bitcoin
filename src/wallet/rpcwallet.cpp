@@ -572,6 +572,52 @@ static UniValue signmessage(const JSONRPCRequest& request)
     return signature;
 }
 
+static CAmount GetReceived(interfaces::Chain::Lock& locked_chain, const CWallet& wallet, const UniValue& params, bool by_label) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    std::set<CTxDestination> address_set;
+
+    if (by_label) {
+        // Get the set of addresses assigned to label
+        std::string label = LabelFromValue(params[0]);
+        address_set = wallet.GetLabelAddresses(label);
+    } else {
+        // Get the address
+        CTxDestination dest = DecodeDestination(params[0].get_str());
+        if (!IsValidDestination(dest)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address");
+        }
+        CScript script_pub_key = GetScriptForDestination(dest);
+        if (!wallet.IsMine(script_pub_key)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Address not found in wallet");
+        }
+        address_set.insert(dest);
+    }
+
+    // Minimum confirmations
+    int min_depth = 1;
+    if (!params[1].isNull())
+        min_depth = params[1].get_int();
+
+    // Tally
+    CAmount amount = 0;
+    for (const std::pair<const uint256, CWalletTx>& wtx_pair : wallet.mapWallet) {
+        const CWalletTx& wtx = wtx_pair.second;
+        if (wtx.IsCoinBase() || !locked_chain.checkFinalTx(*wtx.tx) || wtx.GetDepthInMainChain() < min_depth) {
+            continue;
+        }
+
+        for (const CTxOut& txout : wtx.tx->vout) {
+            CTxDestination address;
+            if (ExtractDestination(txout.scriptPubKey, address) && wallet.IsMine(address) && address_set.count(address)) {
+                amount += txout.nValue;
+            }
+        }
+    }
+
+    return amount;
+}
+
+
 static UniValue getreceivedbyaddress(const JSONRPCRequest& request)
 {
     std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
@@ -609,36 +655,7 @@ static UniValue getreceivedbyaddress(const JSONRPCRequest& request)
     auto locked_chain = pwallet->chain().lock();
     LOCK(pwallet->cs_wallet);
 
-    // Bitcoin address
-    CTxDestination dest = DecodeDestination(request.params[0].get_str());
-    if (!IsValidDestination(dest)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address");
-    }
-    CScript scriptPubKey = GetScriptForDestination(dest);
-    if (!pwallet->IsMine(scriptPubKey)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Address not found in wallet");
-    }
-
-    // Minimum confirmations
-    int nMinDepth = 1;
-    if (!request.params[1].isNull())
-        nMinDepth = request.params[1].get_int();
-
-    // Tally
-    CAmount nAmount = 0;
-    for (const std::pair<const uint256, CWalletTx>& pairWtx : pwallet->mapWallet) {
-        const CWalletTx& wtx = pairWtx.second;
-        if (wtx.IsCoinBase() || !locked_chain->checkFinalTx(*wtx.tx)) {
-            continue;
-        }
-
-        for (const CTxOut& txout : wtx.tx->vout)
-            if (txout.scriptPubKey == scriptPubKey)
-                if (wtx.GetDepthInMainChain() >= nMinDepth)
-                    nAmount += txout.nValue;
-    }
-
-    return  ValueFromAmount(nAmount);
+    return ValueFromAmount(GetReceived(*locked_chain, *pwallet, request.params, /* by_label */ false));
 }
 
 
@@ -679,34 +696,7 @@ static UniValue getreceivedbylabel(const JSONRPCRequest& request)
     auto locked_chain = pwallet->chain().lock();
     LOCK(pwallet->cs_wallet);
 
-    // Minimum confirmations
-    int nMinDepth = 1;
-    if (!request.params[1].isNull())
-        nMinDepth = request.params[1].get_int();
-
-    // Get the set of pub keys assigned to label
-    std::string label = LabelFromValue(request.params[0]);
-    std::set<CTxDestination> setAddress = pwallet->GetLabelAddresses(label);
-
-    // Tally
-    CAmount nAmount = 0;
-    for (const std::pair<const uint256, CWalletTx>& pairWtx : pwallet->mapWallet) {
-        const CWalletTx& wtx = pairWtx.second;
-        if (wtx.IsCoinBase() || !locked_chain->checkFinalTx(*wtx.tx)) {
-            continue;
-        }
-
-        for (const CTxOut& txout : wtx.tx->vout)
-        {
-            CTxDestination address;
-            if (ExtractDestination(txout.scriptPubKey, address) && pwallet->IsMine(address) && setAddress.count(address)) {
-                if (wtx.GetDepthInMainChain() >= nMinDepth)
-                    nAmount += txout.nValue;
-            }
-        }
-    }
-
-    return ValueFromAmount(nAmount);
+    return ValueFromAmount(GetReceived(*locked_chain, *pwallet, request.params, /* by_label */ true));
 }
 
 
@@ -1400,8 +1390,8 @@ UniValue listtransactions(const JSONRPCRequest& request)
                 "\nIf a label name is provided, this will return only incoming transactions paying to addresses with the specified label.\n"
                 "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions.\n",
                 {
-                    {"label", RPCArg::Type::STR, RPCArg::Optional::OMITTED_NAMED_ARG, "If set, should be a valid label name to return only incoming transactions\n"
-            "              with the specified label, or \"*\" to disable filtering and return all transactions."},
+                    {"label|dummy", RPCArg::Type::STR, RPCArg::Optional::OMITTED_NAMED_ARG, "If set, should be a valid label name to return only incoming transactions\n"
+                          "with the specified label, or \"*\" to disable filtering and return all transactions."},
                     {"count", RPCArg::Type::NUM, /* default */ "10", "The number of transactions to return"},
                     {"skip", RPCArg::Type::NUM, /* default */ "0", "The number of transactions to skip"},
                     {"include_watchonly", RPCArg::Type::BOOL, /* default */ "true for watch-only wallets, otherwise false", "Include transactions to watch-only addresses (see 'importaddress')"},
@@ -2325,7 +2315,8 @@ static UniValue settxfee(const JSONRPCRequest& request)
     }
 
             RPCHelpMan{"settxfee",
-                "\nSet the transaction fee per kB for this wallet. Overrides the global -paytxfee command line parameter.\n",
+                "\nSet the transaction fee per kB for this wallet. Overrides the global -paytxfee command line parameter.\n"
+                "Can be deactivated by passing 0 as the fee. In that case automatic fee selection will be used by default.\n",
                 {
                     {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The transaction fee in " + CURRENCY_UNIT + "/kB"},
                 },
@@ -2343,12 +2334,15 @@ static UniValue settxfee(const JSONRPCRequest& request)
 
     CAmount nAmount = AmountFromValue(request.params[0]);
     CFeeRate tx_fee_rate(nAmount, 1000);
+    CFeeRate max_tx_fee_rate(pwallet->m_default_max_tx_fee, 1000);
     if (tx_fee_rate == CFeeRate(0)) {
         // automatic selection
     } else if (tx_fee_rate < pwallet->chain().relayMinFee()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("txfee cannot be less than min relay tx fee (%s)", pwallet->chain().relayMinFee().ToString()));
     } else if (tx_fee_rate < pwallet->m_min_fee) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("txfee cannot be less than wallet min fee (%s)", pwallet->m_min_fee.ToString()));
+    } else if (tx_fee_rate > max_tx_fee_rate) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("txfee cannot be more than wallet max tx fee (%s)", max_tx_fee_rate.ToString()));
     }
 
     pwallet->m_pay_tx_fee = tx_fee_rate;
@@ -2587,7 +2581,7 @@ static UniValue loadwallet(const JSONRPCRequest& request)
             RPCHelpMan{"loadwallet",
                 "\nLoads a wallet from a wallet file or directory."
                 "\nNote that all wallet command-line options used when starting bitcoind will be"
-                "\napplied to the new wallet (eg -zapwallettxes, upgradewallet, rescan, etc).\n",
+                "\napplied to the new wallet (eg -zapwallettxes, rescan, etc).\n",
                 {
                     {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "The wallet directory or .dat file."},
                 },
@@ -3536,7 +3530,7 @@ UniValue rescanblockchain(const JSONRPCRequest& request)
                 },
             }.Check(request);
 
-    WalletRescanReserver reserver(pwallet);
+    WalletRescanReserver reserver(*pwallet);
     if (!reserver.reserve()) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is currently rescanning. Abort existing rescan or wait.");
     }
@@ -4013,7 +4007,7 @@ UniValue sethdseed(const JSONRPCRequest& request)
 
     // Do not do anything to non-HD wallets
     if (!pwallet->CanSupportFeature(FEATURE_HD)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set a HD seed on a non-HD wallet. Start with -upgradewallet in order to upgrade a non-HD wallet to HD");
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set a HD seed on a non-HD wallet. Use the upgradewallet RPC in order to upgrade a non-HD wallet to HD");
     }
 
     EnsureWalletIsUnlocked(pwallet);
@@ -4237,6 +4231,45 @@ UniValue walletcreatefundedpsbt(const JSONRPCRequest& request)
     return result;
 }
 
+static UniValue upgradewallet(const JSONRPCRequest& request)
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    CWallet* const pwallet = wallet.get();
+
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+    RPCHelpMan{"upgradewallet",
+        "\nUpgrade the wallet. Upgrades to the latest version if no version number is specified\n"
+        "New keys may be generated and a new wallet backup will need to be made.",
+        {
+            {"version", RPCArg::Type::NUM, /* default */ strprintf("%d", FEATURE_LATEST), "The version number to upgrade to. Default is the latest wallet version"}
+        },
+        RPCResults{},
+        RPCExamples{
+            HelpExampleCli("upgradewallet", "169900")
+            + HelpExampleRpc("upgradewallet", "169900")
+        }
+    }.Check(request);
+
+    RPCTypeCheck(request.params, {UniValue::VNUM}, true);
+
+    EnsureWalletIsUnlocked(pwallet);
+
+    int version = 0;
+    if (!request.params[0].isNull()) {
+        version = request.params[0].get_int();
+    }
+
+    std::string error;
+    std::vector<std::string> warnings;
+    if (!pwallet->UpgradeWallet(version, error, warnings)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, error);
+    }
+    return error;
+}
+
 UniValue abortrescan(const JSONRPCRequest& request); // in rpcdump.cpp
 UniValue dumpprivkey(const JSONRPCRequest& request); // in rpcdump.cpp
 UniValue importprivkey(const JSONRPCRequest& request);
@@ -4305,6 +4338,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "signmessage",                      &signmessage,                   {"address","message"} },
     { "wallet",             "signrawtransactionwithwallet",     &signrawtransactionwithwallet,  {"hexstring","prevtxs","sighashtype"} },
     { "wallet",             "unloadwallet",                     &unloadwallet,                  {"wallet_name"} },
+    { "wallet",             "upgradewallet",                    &upgradewallet,                 {"version"} },
     { "wallet",             "walletcreatefundedpsbt",           &walletcreatefundedpsbt,        {"inputs","outputs","locktime","options","bip32derivs"} },
     { "wallet",             "walletlock",                       &walletlock,                    {} },
     { "wallet",             "walletpassphrase",                 &walletpassphrase,              {"passphrase","timeout"} },

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2019 The Bitcoin Core developers
+// Copyright (c) 2012-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -54,7 +54,7 @@ BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions, TestChain100Setup)
             wallet.SetLastBlockProcessed(::ChainActive().Height(), ::ChainActive().Tip()->GetBlockHash());
         }
         AddKey(wallet, coinbaseKey);
-        WalletRescanReserver reserver(&wallet);
+        WalletRescanReserver reserver(wallet);
         reserver.reserve();
         CWallet::ScanResult result = wallet.ScanForWalletTransactions({} /* start_block */, 0 /* start_height */, {} /* max_height */, reserver, false /* update */);
         BOOST_CHECK_EQUAL(result.status, CWallet::ScanResult::FAILURE);
@@ -73,7 +73,7 @@ BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions, TestChain100Setup)
             wallet.SetLastBlockProcessed(::ChainActive().Height(), ::ChainActive().Tip()->GetBlockHash());
         }
         AddKey(wallet, coinbaseKey);
-        WalletRescanReserver reserver(&wallet);
+        WalletRescanReserver reserver(wallet);
         reserver.reserve();
         CWallet::ScanResult result = wallet.ScanForWalletTransactions(oldTip->GetBlockHash(), oldTip->nHeight, {} /* max_height */, reserver, false /* update */);
         BOOST_CHECK_EQUAL(result.status, CWallet::ScanResult::SUCCESS);
@@ -96,7 +96,7 @@ BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions, TestChain100Setup)
             wallet.SetLastBlockProcessed(::ChainActive().Height(), ::ChainActive().Tip()->GetBlockHash());
         }
         AddKey(wallet, coinbaseKey);
-        WalletRescanReserver reserver(&wallet);
+        WalletRescanReserver reserver(wallet);
         reserver.reserve();
         CWallet::ScanResult result = wallet.ScanForWalletTransactions(oldTip->GetBlockHash(), oldTip->nHeight, {} /* max_height */, reserver, false /* update */);
         BOOST_CHECK_EQUAL(result.status, CWallet::ScanResult::FAILURE);
@@ -118,7 +118,7 @@ BOOST_FIXTURE_TEST_CASE(scan_for_wallet_transactions, TestChain100Setup)
             wallet.SetLastBlockProcessed(::ChainActive().Height(), ::ChainActive().Tip()->GetBlockHash());
         }
         AddKey(wallet, coinbaseKey);
-        WalletRescanReserver reserver(&wallet);
+        WalletRescanReserver reserver(wallet);
         reserver.reserve();
         CWallet::ScanResult result = wallet.ScanForWalletTransactions(oldTip->GetBlockHash(), oldTip->nHeight, {} /* max_height */, reserver, false /* update */);
         BOOST_CHECK_EQUAL(result.status, CWallet::ScanResult::FAILURE);
@@ -217,16 +217,19 @@ BOOST_FIXTURE_TEST_CASE(importwallet_rescan, TestChain100Setup)
     // Import key into wallet and call dumpwallet to create backup file.
     {
         std::shared_ptr<CWallet> wallet = std::make_shared<CWallet>(chain.get(), WalletLocation(), WalletDatabase::CreateDummy());
-        auto spk_man = wallet->GetOrCreateLegacyScriptPubKeyMan();
-        LOCK2(wallet->cs_wallet, spk_man->cs_KeyStore);
-        spk_man->mapKeyMetadata[coinbaseKey.GetPubKey().GetID()].nCreateTime = KEY_TIME;
-        spk_man->AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey());
+        {
+            auto spk_man = wallet->GetOrCreateLegacyScriptPubKeyMan();
+            LOCK2(wallet->cs_wallet, spk_man->cs_KeyStore);
+            spk_man->mapKeyMetadata[coinbaseKey.GetPubKey().GetID()].nCreateTime = KEY_TIME;
+            spk_man->AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey());
 
+            AddWallet(wallet);
+            wallet->SetLastBlockProcessed(::ChainActive().Height(), ::ChainActive().Tip()->GetBlockHash());
+        }
         JSONRPCRequest request;
         request.params.setArray();
         request.params.push_back(backup_file);
-        AddWallet(wallet);
-        wallet->SetLastBlockProcessed(::ChainActive().Height(), ::ChainActive().Tip()->GetBlockHash());
+
         ::dumpwallet(request);
         RemoveWallet(wallet);
     }
@@ -463,7 +466,7 @@ public:
         bool firstRun;
         wallet->LoadWallet(firstRun);
         AddKey(*wallet, coinbaseKey);
-        WalletRescanReserver reserver(wallet.get());
+        WalletRescanReserver reserver(*wallet);
         reserver.reserve();
         CWallet::ScanResult result = wallet->ScanForWalletTransactions(::ChainActive().Genesis()->GetBlockHash(), 0 /* start_height */, {} /* max_height */, reserver, false /* update */);
         BOOST_CHECK_EQUAL(result.status, CWallet::ScanResult::SUCCESS);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2015-2019 The Bitcoin Core developers
+# Copyright (c) 2015-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Functionality to build scripts, as well as signature hash functions.
@@ -449,15 +449,8 @@ class CScript(bytes):
         return other
 
     def __add__(self, other):
-        # Do the coercion outside of the try block so that errors in it are
-        # noticed.
-        other = self.__coerce_instance(other)
-
-        try:
-            # bytes.__add__ always returns bytes instances unfortunately
-            return CScript(super(CScript, self).__add__(other))
-        except TypeError:
-            raise TypeError('Can not add a %r instance to a CScript' % other.__class__)
+        # add makes no sense for a CScript()
+        raise NotImplementedError
 
     def join(self, iterable):
         # join makes no sense for a CScript()

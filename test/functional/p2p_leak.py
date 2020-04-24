@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2019 The Bitcoin Core developers
+# Copyright (c) 2017-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test message sending before handshake completion.
@@ -37,7 +37,7 @@ class CLazyNode(P2PInterface):
 
     def bad_message(self, message):
         self.unexpected_msg = True
-        self.log.info("should not have received message: %s" % message.command)
+        self.log.info("should not have received message: %s" % message.msgtype)
 
     def on_open(self):
         self.ever_connected = True

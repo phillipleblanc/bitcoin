@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 The Bitcoin Core developers
+// Copyright (c) 2015-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -152,7 +152,7 @@ void TestGUI(interfaces::Node& node)
         wallet->SetLastBlockProcessed(105, ::ChainActive().Tip()->GetBlockHash());
     }
     {
-        WalletRescanReserver reserver(wallet.get());
+        WalletRescanReserver reserver(*wallet);
         reserver.reserve();
         CWallet::ScanResult result = wallet->ScanForWalletTransactions(Params().GetConsensus().hashGenesisBlock, 0 /* block height */, {} /* max height */, reserver, true /* fUpdate */);
         QCOMPARE(result.status, CWallet::ScanResult::SUCCESS);

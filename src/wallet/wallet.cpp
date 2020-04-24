@@ -2372,6 +2372,13 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             ++it;
     }
 
+    unsigned int limit_ancestor_count = 0;
+    unsigned int limit_descendant_count = 0;
+    chain().getPackageLimits(limit_ancestor_count, limit_descendant_count);
+    size_t max_ancestors = (size_t)std::max<int64_t>(1, limit_ancestor_count);
+    size_t max_descendants = (size_t)std::max<int64_t>(1, limit_descendant_count);
+    bool fRejectLongChains = gArgs.GetBoolArg("-walletrejectlongchains", DEFAULT_WALLET_REJECT_LONG_CHAINS);
+
     // form groups from remaining coins; note that preset coins will not
     // automatically have their associated (same address) coins included
     if (coin_control.m_avoid_partial_spends && vCoins.size() > OUTPUT_GROUP_MAX_ENTRIES) {
@@ -2380,14 +2387,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
         // explicitly shuffling the outputs before processing
         Shuffle(vCoins.begin(), vCoins.end(), FastRandomContext());
     }
-    std::vector<OutputGroup> groups = GroupOutputs(vCoins, !coin_control.m_avoid_partial_spends);
-
-    unsigned int limit_ancestor_count;
-    unsigned int limit_descendant_count;
-    chain().getPackageLimits(limit_ancestor_count, limit_descendant_count);
-    size_t max_ancestors = (size_t)std::max<int64_t>(1, limit_ancestor_count);
-    size_t max_descendants = (size_t)std::max<int64_t>(1, limit_descendant_count);
-    bool fRejectLongChains = gArgs.GetBoolArg("-walletrejectlongchains", DEFAULT_WALLET_REJECT_LONG_CHAINS);
+    std::vector<OutputGroup> groups = GroupOutputs(vCoins, !coin_control.m_avoid_partial_spends, max_ancestors);
 
     bool res = value_to_select <= 0 ||
         SelectCoinsMinConf(value_to_select, CoinEligibilityFilter(1, 6, 0), groups, setCoinsRet, nValueRet, coin_selection_params, bnb_used) ||
@@ -2770,20 +2770,14 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
                 //  rediscover unknown transactions that were written with keys of ours to recover
                 //  post-backup change.
 
-                // Reserve a new key pair from key pool
-                if (!CanGetAddresses(true)) {
-                    strFailReason = _("Can't generate a change-address key. No keys in the internal keypool and can't generate any keys.").translated;
-                    return false;
-                }
+                // Reserve a new key pair from key pool. If it fails, provide a dummy
+                // destination in case we don't need change.
                 CTxDestination dest;
-                bool ret = reservedest.GetReservedDestination(dest, true);
-                if (!ret)
-                {
-                    strFailReason = "Keypool ran out, please call keypoolrefill first";
-                    return false;
+                if (!reservedest.GetReservedDestination(dest, true)) {
+                    strFailReason = _("Transaction needs a change address, but we can't generate it. Please call keypoolrefill first.").translated;
                 }
-
                 scriptChange = GetScriptForDestination(dest);
+                assert(!dest.empty() || scriptChange.empty());
             }
             CTxOut change_prototype_txout(0, scriptChange);
             coin_selection_params.change_output_size = GetSerializeSize(change_prototype_txout);
@@ -2998,6 +2992,11 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
                 nFeeRet = nFeeNeeded;
                 coin_selection_params.use_bnb = false;
                 continue;
+            }
+
+            // Give up if change keypool ran out and we failed to find a solution without change:
+            if (scriptChange.empty() && nChangePosInOut != -1) {
+                return false;
             }
         }
 
@@ -3294,7 +3293,7 @@ bool CWallet::GetNewChangeDestination(const OutputType type, CTxDestination& des
 
     ReserveDestination reservedest(this, type);
     if (!reservedest.GetReservedDestination(dest, true)) {
-        error = "Error: Keypool ran out, please call keypoolrefill first";
+        error = _("Error: Keypool ran out, please call keypoolrefill first").translated;
         return false;
     }
 
@@ -3828,44 +3827,6 @@ std::shared_ptr<CWallet> CWallet::CreateWalletFromFile(interfaces::Chain& chain,
         }
     }
 
-    int prev_version = walletInstance->GetVersion();
-    if (gArgs.GetBoolArg("-upgradewallet", fFirstRun))
-    {
-        int nMaxVersion = gArgs.GetArg("-upgradewallet", 0);
-        if (nMaxVersion == 0) // the -upgradewallet without argument case
-        {
-            walletInstance->WalletLogPrintf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
-            nMaxVersion = FEATURE_LATEST;
-            walletInstance->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
-        }
-        else
-            walletInstance->WalletLogPrintf("Allowing wallet upgrade up to %i\n", nMaxVersion);
-        if (nMaxVersion < walletInstance->GetVersion())
-        {
-            error = _("Cannot downgrade wallet").translated;
-            return nullptr;
-        }
-        walletInstance->SetMaxVersion(nMaxVersion);
-    }
-
-    // Upgrade to HD if explicit upgrade
-    if (gArgs.GetBoolArg("-upgradewallet", false)) {
-        LOCK(walletInstance->cs_wallet);
-
-        // Do not upgrade versions to any version between HD_SPLIT and FEATURE_PRE_SPLIT_KEYPOOL unless already supporting HD_SPLIT
-        int max_version = walletInstance->GetVersion();
-        if (!walletInstance->CanSupportFeature(FEATURE_HD_SPLIT) && max_version >= FEATURE_HD_SPLIT && max_version < FEATURE_PRE_SPLIT_KEYPOOL) {
-            error = _("Cannot upgrade a non HD split wallet without upgrading to support pre split keypool. Please use -upgradewallet=169900 or -upgradewallet with no version specified.").translated;
-            return nullptr;
-        }
-
-        for (auto spk_man : walletInstance->GetActiveScriptPubKeyMans()) {
-            if (!spk_man->Upgrade(prev_version, error)) {
-                return nullptr;
-            }
-        }
-    }
-
     if (fFirstRun)
     {
         // ensure this wallet.dat can only be opened by clients supporting HD with chain split and expects no default key
@@ -4062,7 +4023,7 @@ std::shared_ptr<CWallet> CWallet::CreateWalletFromFile(interfaces::Chain& chain,
         }
 
         {
-            WalletRescanReserver reserver(walletInstance.get());
+            WalletRescanReserver reserver(*walletInstance);
             if (!reserver.reserve() || (ScanResult::SUCCESS != walletInstance->ScanForWalletTransactions(locked_chain->getBlockHash(rescan_height), rescan_height, {} /* max height */, reserver, true /* update */).status)) {
                 error = _("Failed to rescan the wallet during initialization").translated;
                 return nullptr;
@@ -4127,6 +4088,42 @@ const CAddressBookData* CWallet::FindAddressBookEntry(const CTxDestination& dest
     return &address_book_it->second;
 }
 
+bool CWallet::UpgradeWallet(int version, std::string& error, std::vector<std::string>& warnings)
+{
+    int prev_version = GetVersion();
+    int nMaxVersion = version;
+    if (nMaxVersion == 0) // the -upgradewallet without argument case
+    {
+        WalletLogPrintf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
+        nMaxVersion = FEATURE_LATEST;
+        SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
+    }
+    else
+        WalletLogPrintf("Allowing wallet upgrade up to %i\n", nMaxVersion);
+    if (nMaxVersion < GetVersion())
+    {
+        error = _("Cannot downgrade wallet").translated;
+        return false;
+    }
+    SetMaxVersion(nMaxVersion);
+
+    LOCK(cs_wallet);
+
+    // Do not upgrade versions to any version between HD_SPLIT and FEATURE_PRE_SPLIT_KEYPOOL unless already supporting HD_SPLIT
+    int max_version = GetVersion();
+    if (!CanSupportFeature(FEATURE_HD_SPLIT) && max_version >= FEATURE_HD_SPLIT && max_version < FEATURE_PRE_SPLIT_KEYPOOL) {
+        error = _("Cannot upgrade a non HD split wallet without upgrading to support pre split keypool. Please use version 169900 or no version specified.").translated;
+        return false;
+    }
+
+    for (auto spk_man : GetActiveScriptPubKeyMans()) {
+        if (!spk_man->Upgrade(prev_version, error)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void CWallet::postInitProcess()
 {
     auto locked_chain = chain().lock();
@@ -4184,32 +4181,49 @@ bool CWalletTx::IsImmatureCoinBase() const
     return GetBlocksToMaturity() > 0;
 }
 
-std::vector<OutputGroup> CWallet::GroupOutputs(const std::vector<COutput>& outputs, bool single_coin) const {
+std::vector<OutputGroup> CWallet::GroupOutputs(const std::vector<COutput>& outputs, bool single_coin, const size_t max_ancestors) const {
     std::vector<OutputGroup> groups;
     std::map<CTxDestination, OutputGroup> gmap;
-    CTxDestination dst;
+    std::set<CTxDestination> full_groups;
+
     for (const auto& output : outputs) {
         if (output.fSpendable) {
+            CTxDestination dst;
             CInputCoin input_coin = output.GetInputCoin();
 
             size_t ancestors, descendants;
             chain().getTransactionAncestry(output.tx->GetHash(), ancestors, descendants);
             if (!single_coin && ExtractDestination(output.tx->tx->vout[output.i].scriptPubKey, dst)) {
-                // Limit output groups to no more than 10 entries, to protect
-                // against inadvertently creating a too-large transaction
-                // when using -avoidpartialspends
-                if (gmap[dst].m_outputs.size() >= OUTPUT_GROUP_MAX_ENTRIES) {
-                    groups.push_back(gmap[dst]);
-                    gmap.erase(dst);
+                auto it = gmap.find(dst);
+                if (it != gmap.end()) {
+                    // Limit output groups to no more than OUTPUT_GROUP_MAX_ENTRIES
+                    // number of entries, to protect against inadvertently creating
+                    // a too-large transaction when using -avoidpartialspends to
+                    // prevent breaking consensus or surprising users with a very
+                    // high amount of fees.
+                    if (it->second.m_outputs.size() >= OUTPUT_GROUP_MAX_ENTRIES) {
+                        groups.push_back(it->second);
+                        it->second = OutputGroup{};
+                        full_groups.insert(dst);
+                    }
+                    it->second.Insert(input_coin, output.nDepth, output.tx->IsFromMe(ISMINE_ALL), ancestors, descendants);
+                } else {
+                    gmap[dst].Insert(input_coin, output.nDepth, output.tx->IsFromMe(ISMINE_ALL), ancestors, descendants);
                 }
-                gmap[dst].Insert(input_coin, output.nDepth, output.tx->IsFromMe(ISMINE_ALL), ancestors, descendants);
             } else {
                 groups.emplace_back(input_coin, output.nDepth, output.tx->IsFromMe(ISMINE_ALL), ancestors, descendants);
             }
         }
     }
     if (!single_coin) {
-        for (const auto& it : gmap) groups.push_back(it.second);
+        for (auto& it : gmap) {
+            auto& group = it.second;
+            if (full_groups.count(it.first) > 0) {
+                // Make this unattractive as we want coin selection to avoid it if possible
+                group.m_ancestors = max_ancestors - 1;
+            }
+            groups.push_back(group);
+        }
     }
     return groups;
 }

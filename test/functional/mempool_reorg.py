@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2018 The Bitcoin Core developers
+# Copyright (c) 2014-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test mempool re-org scenarios.
@@ -19,8 +19,6 @@ class MempoolCoinbaseTest(BitcoinTestFramework):
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
-
-    alert_filename = None  # Set by setup_network
 
     def run_test(self):
         # Start with a 200 block chain
@@ -76,9 +74,8 @@ class MempoolCoinbaseTest(BitcoinTestFramework):
         spend_101_id = self.nodes[0].sendrawtransaction(spend_101_raw)
         spend_102_1_id = self.nodes[0].sendrawtransaction(spend_102_1_raw)
 
-        self.sync_all(timeout=720)
-
         assert_equal(set(self.nodes[0].getrawmempool()), {spend_101_id, spend_102_1_id, timelock_tx_id})
+        self.sync_all()
 
         for node in self.nodes:
             node.invalidateblock(last_block[0])
@@ -91,10 +88,9 @@ class MempoolCoinbaseTest(BitcoinTestFramework):
         for node in self.nodes:
             node.invalidateblock(new_blocks[0])
 
-        self.sync_all(timeout=720)
-
         # mempool should be empty.
         assert_equal(set(self.nodes[0].getrawmempool()), set())
+        self.sync_all()
 
 
 if __name__ == '__main__':
