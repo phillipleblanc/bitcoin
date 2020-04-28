@@ -55,10 +55,12 @@ private:
 
 private Q_SLOTS:
     void updateDisplayUnit();
+    void updateFiatDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
     void updateAlerts(const QString &warnings);
-    void updateWatchOnlyLabels(bool showWatchOnly);
+    void showFiatLabels();
     void handleOutOfSyncWarningClicks();
+    void setFiatBalance(int unitFiat, const CAmount& walletBalance);
 };
 
 #endif // BITCOIN_QT_OVERVIEWPAGE_H

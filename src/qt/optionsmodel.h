@@ -63,6 +63,7 @@ public:
         SpendZeroConfChange,    // bool
         Listen,                 // bool
         OptionIDRowCount,
+        FiatDisplayUnit,               // FiatUnits::Unit
     };
 
     void Init(bool resetSettings = false);
@@ -73,12 +74,15 @@ public:
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
     /** Updates current unit in memory, settings and emits displayUnitChanged(newUnit) signal */
     void setDisplayUnit(const QVariant &value);
+    /** Updates current fiat unit in memory, settings and emits fiatDisplayUnitChanged(newUnit) signal */
+    void setFiatDisplayUnit(const QVariant &value);
 
     /* Explicit getters */
     bool getHideTrayIcon() const { return fHideTrayIcon; }
     bool getMinimizeToTray() const { return fMinimizeToTray; }
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
+    int getFiatDisplayUnit() const { return nFiatDisplayUnit; }
     QString getThirdPartyTxUrls() const { return strThirdPartyTxUrls; }
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
@@ -101,6 +105,7 @@ private:
     bool fMinimizeOnClose;
     QString language;
     int nDisplayUnit;
+    int nFiatDisplayUnit;
     QString strThirdPartyTxUrls;
     bool fCoinControlFeatures;
     /* settings that were overridden by command-line */
@@ -113,6 +118,7 @@ private:
     void checkAndMigrate();
 Q_SIGNALS:
     void displayUnitChanged(int unit);
+    void fiatDisplayUnitChanged(int unit);
     void coinControlFeaturesChanged(bool);
     void hideTrayIconChanged(bool);
 };
